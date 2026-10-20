@@ -2,6 +2,7 @@
   "Author": "Lizvik",
   "Name": "AutoHudLayout",
   "InternalName": "AutoHudLayout",
+  "RepoUrl": "https://github.com/lizvik/AutoHudLayout",
   "IconUrl": "https://raw.githubusercontent.com/lizvik/AutoHudLayout/master/AutoHudLayout/Images/Icon.png",
   "Punchline": "Automatically switches HUD layouts by game window resolution.",
   "Description": "Maps exact game client-area resolutions to native HUD layout slots 1-4, with configurable rules.",
