@@ -1,4 +1,5 @@
 using Dalamud.Configuration;
+using Newtonsoft.Json;
 
 namespace AutoHudLayout;
 
@@ -9,6 +10,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool Enabled { get; set; } = true;
     public int PollMilliseconds { get; set; } = 500;
     public int StableMilliseconds { get; set; } = 1200;
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     public List<ResolutionRule> Rules { get; set; } =
     [
         new(1920, 1080, 1),

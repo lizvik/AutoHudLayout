@@ -1,5 +1,6 @@
 param(
-    [string]$ExpectedTag
+    [string]$ExpectedTag,
+    [switch]$UpdateRepositoryMetadata
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,13 @@ if ($version -match '^[0-9]+\.[0-9]+\.[0-9]+$') {
 $entries = @(ConvertFrom-Json -InputObject (Get-Content -LiteralPath $repoPath -Raw))
 if ($entries.Count -ne 1) {
     throw 'repo.json must contain exactly one plugin entry.'
+}
+if ($UpdateRepositoryMetadata) {
+    foreach ($field in @('AssemblyVersion', 'TestingAssemblyVersion')) {
+        $entries[0].$field = $version
+    }
+    $json = ConvertTo-Json -InputObject $entries -Depth 10
+    [System.IO.File]::WriteAllText($repoPath, "$json`n", [System.Text.UTF8Encoding]::new($false))
 }
 foreach ($field in @('AssemblyVersion', 'TestingAssemblyVersion')) {
     if ($entries[0].$field -ne $version) {
