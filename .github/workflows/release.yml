@@ -1,0 +1,107 @@
+name: Release AutoHudLayout
+
+on:
+  push:
+    tags:
+      - 'v*.*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to release (for example, v1.0.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Resolve release tag
+        id: tag
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_TAG } else { $env:GITHUB_REF_NAME }
+          if ($tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Invalid release tag '$tag'."
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
+
+      - name: Check out tagged source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          persist-credentials: false
+
+      - name: Verify tag and metadata versions
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: ./.github/scripts/Check-ReleaseVersion.ps1 -ExpectedTag $env:RELEASE_TAG
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download Dalamud development files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'dalamud.zip'
+          $destination = Join-Path $env:APPDATA 'XIVLauncher\addon\Hooks\dev'
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile $archive
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination -Force
+
+      - name: Restore locked dependencies
+        shell: pwsh
+        run: |
+          dotnet restore .\AutoHudLayout\AutoHudLayout.csproj --locked-mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and verify release package
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          dotnet build .\AutoHudLayout\AutoHudLayout.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = '.\AutoHudLayout\bin\Release\AutoHudLayout\latest.zip'
+          if (!(Test-Path -LiteralPath $package) -or (Get-Item -LiteralPath $package).Length -eq 0) {
+            throw 'Release package is missing or empty.'
+          }
+          $dll = '.\AutoHudLayout\bin\Release\AutoHudLayout.dll'
+          $assemblyVersion = [System.Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $dll)).Version.ToString()
+          if ($assemblyVersion -ne $env:RELEASE_TAG.Substring(1)) {
+            throw "Built assembly version $assemblyVersion does not match $env:RELEASE_TAG."
+          }
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          $package = '.\AutoHudLayout\bin\Release\AutoHudLayout\latest.zip'
+          $release = gh release view $env:RELEASE_TAG --json 'isDraft,assets' 2>$null | ConvertFrom-Json
+          if ($LASTEXITCODE -eq 0) {
+            if (@($release.assets.name) -notcontains 'latest.zip') {
+              gh release upload $env:RELEASE_TAG $package
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            if ($release.isDraft) {
+              gh release edit $env:RELEASE_TAG --draft=false
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          } else {
+            gh release create $env:RELEASE_TAG $package --title $env:RELEASE_TAG --generate-notes --verify-tag --latest
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
