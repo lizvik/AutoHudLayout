@@ -1,0 +1,10 @@
+{
+  "Author": "Community Example",
+  "Name": "AutoHudLayout",
+  "InternalName": "AutoHudLayout",
+  "Punchline": "Automatically switches HUD layouts by game window resolution.",
+  "Description": "Maps exact game client-area resolutions to native HUD layout slots 1-4, with configurable rules.",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 15,
+  "Tags": ["hud", "resolution", "layout"]
+}

@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: >-
+      github.event_name == 'pull_request' ||
+      startsWith(github.event.head_commit.message, 'ci:') ||
+      startsWith(github.event.head_commit.message, 'ci：')
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download Dalamud development files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'dalamud.zip'
+          $destination = Join-Path $env:APPDATA 'XIVLauncher\addon\Hooks\dev'
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile $archive
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination -Force
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore .\AutoHudLayout\AutoHudLayout.csproj --locked-mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build (Release)
+        shell: pwsh
+        run: |
+          dotnet build .\AutoHudLayout\AutoHudLayout.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = '.\AutoHudLayout\bin\Release\AutoHudLayout\latest.zip'
+          if (!(Test-Path -LiteralPath $package) -or (Get-Item -LiteralPath $package).Length -eq 0) {
+            throw 'Release package is missing or empty'
+          }
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoHudLayout-Release
+          path: AutoHudLayout/bin/Release/AutoHudLayout/
+          if-no-files-found: error
