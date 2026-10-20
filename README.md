@@ -1,6 +1,6 @@
 # AutoHudLayout
 
-AutoHudLayout 是适用于 Windows 和 Dalamud API 15 的 FFXIV 插件。登录角色后，它根据游戏窗口**客户区的精确像素尺寸**，自动切换到对应的游戏原生 HUD 布局（1–4）。
+AutoHudLayout 是适用于 Windows 和 Dalamud API 15 的《最终幻想 XIV》插件。它将游戏窗口**客户区的精确像素尺寸**映射到游戏原生 HUD 布局（1–4）；登录角色后，当窗口尺寸变化并稳定时，插件会自动应用匹配的布局。你可以为不同分辨率配置规则，未匹配时保持当前 HUD，适合在不同显示器或窗口尺寸之间切换。
 
 ## 默认规则
 
@@ -30,25 +30,14 @@ AutoHudLayout 是适用于 Windows 和 Dalamud API 15 的 FFXIV 插件。登录�
 需要 Windows、.NET 10 SDK，以及可用的本地 Dalamud API 15 开发环境。在仓库根目录运行：
 
 ```powershell
-dotnet restore .\AutoHudLayout\AutoHudLayout.csproj
-dotnet build .\AutoHudLayout\AutoHudLayout.csproj -c Release
+dotnet restore .\AutoHudLayout.sln
+dotnet build .\AutoHudLayout.sln -c Release
 ```
 
-编译后的 DLL 位于 `AutoHudLayout\bin\Release\AutoHudLayout.dll`，打包文件位于 `AutoHudLayout\bin\Release\AutoHudLayout\latest.zip`。本地开发加载时，将 DLL 和同目录的 `AutoHudLayout.json` 放入独立插件目录，再通过 Dalamud 的 Dev Plugins 加载。
+编译后的 DLL 位于 `AutoHudLayout\bin\x64\Release\AutoHudLayout.dll`，打包文件位于 `AutoHudLayout\bin\x64\Release\AutoHudLayout\latest.zip`。本地开发加载时，将 DLL 和同目录的 `AutoHudLayout.json` 放入独立插件目录，再通过 Dalamud 的 Dev Plugins 加载。
 
 ## 注意
 
 - 匹配的是游戏窗口客户区尺寸，不是桌面分辨率或游戏内部渲染分辨率。DPI 缩放也可能影响读取到的尺寸。
 - 切换通过游戏原生 `/hudlayout` 命令执行，依赖当前游戏版本的客户端结构。游戏更新后需重新验证。
 - 插件记录的是上次发送的切换请求，并不读取当前实际 HUD 布局。测试前建议备份游戏 HUD 设置。
-
-## GitHub Actions
-
-推送到 `master` 的最新提交消息以 `ci:` 或 `ci：` 开头时，工作流会构建 Release；面向 `master` 的 PR 也会执行构建检查。一次推送包含多个提交时，以最后一个提交的消息判断是否运行。例如：
-
-```powershell
-git commit -m "ci: build plugin"
-git push origin master
-```
-
-工作流参考 [FFXIV-AutoFATEGrind 的 CI](https://github.com/lizvik/FFXIV-AutoFATEGrind/blob/master/.github/workflows/ci.yml)：在 Windows 上下载 Dalamud 开发文件，使用 .NET 10 锁定依赖构建 Release，并将插件包上传为 GitHub Actions artifact。`ci:` 提交只触发构建和打包；插件仓库元数据应由独立发布流程维护。
