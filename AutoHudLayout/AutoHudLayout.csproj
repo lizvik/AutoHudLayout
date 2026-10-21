@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AutoHudLayout</AssemblyName>
-    <Version>1.0.1.1</Version>
+    <Version>1.0.2.0</Version>
     <Description>Automatically select a native HUD layout by game client area resolution.</Description>
   </PropertyGroup>
   

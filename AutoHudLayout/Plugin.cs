@@ -29,6 +29,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private bool _showSettings;
     private long _lastPoll;
     private long _changedAt;
+    private long _lastHudRequestAt;
     private (int Width, int Height) _observed;
     private (int Width, int Height) _appliedResolution;
     private int _lastRequestedHud;
@@ -73,6 +74,7 @@ public sealed partial class Plugin : IDalamudPlugin
         _observed = default;
         _appliedResolution = default;
         _changedAt = 0;
+        _lastHudRequestAt = 0;
         _lastRequestedHud = 0;
         _lastMatchedHud = null;
         _lastPoll = 0;
@@ -108,6 +110,7 @@ public sealed partial class Plugin : IDalamudPlugin
             _observed = current;
             _changedAt = now;
             _appliedResolution = default;
+            _lastHudRequestAt = 0;
             _lastRequestedHud = 0;
             return;
         }
@@ -121,20 +124,54 @@ public sealed partial class Plugin : IDalamudPlugin
         }
         _lastMatchedHud = rule.Hud;
         _status += $"；目标 HUD {rule.Hud}";
-        // 避免每次轮询重复发送。外部手动修改 HUD 后可使用 /autohud recheck。
-        if (_appliedResolution == current && _lastRequestedHud == rule.Hud) return;
+        // 只有确认游戏实际切换后才停止重试；确认后仍允许玩家手动更换 HUD。
+        if (_appliedResolution == current && _lastRequestedHud == rule.Hud)
+        {
+            _status += "；已确认";
+            return;
+        }
+        if (!TryGetCurrentHud(out var currentHud))
+        {
+            _status += "；等待游戏 HUD 就绪";
+            return;
+        }
+        if (currentHud == rule.Hud)
+        {
+            _appliedResolution = current;
+            _lastRequestedHud = rule.Hud;
+            _status += "；已确认";
+            _log.Information($"AutoHudLayout: {width}x{height} -> HUD {rule.Hud} 已确认");
+            return;
+        }
+        if (_lastRequestedHud == rule.Hud && _lastHudRequestAt != 0 &&
+            Stopwatch.GetElapsedTime(_lastHudRequestAt, now).TotalMilliseconds < 2000)
+        {
+            _status += $"；当前 HUD {currentHud}，等待切换确认";
+            return;
+        }
         try
         {
             ExecuteHudCommand(rule.Hud);
-            _appliedResolution = current;
             _lastRequestedHud = rule.Hud;
-            _log.Information($"AutoHudLayout: {width}x{height} -> HUD {rule.Hud}");
+            _lastHudRequestAt = now;
+            _status += $"；当前 HUD {currentHud}，已发送切换请求";
         }
         catch (Exception e)
         {
             _log.Error(e, "AutoHudLayout: HUD 切换失败");
             _status += "；执行失败，详见插件日志";
         }
+    }
+
+    private static unsafe bool TryGetCurrentHud(out int hud)
+    {
+        hud = 0;
+        var ui = UIModule.Instance();
+        if (ui == null || !ui->IsUIReady()) return false;
+        var addonConfig = ui->GetAddonConfig();
+        if (addonConfig == null || !addonConfig->IsLoaded || addonConfig->ActiveDataSet == null) return false;
+        hud = addonConfig->ActiveDataSet->CurrentHudLayout + 1;
+        return hud is >= 1 and <= 4;
     }
 
     // 在游戏主线程调用游戏原生命令解析器。该互操作依赖游戏版本。
@@ -219,7 +256,7 @@ public sealed partial class Plugin : IDalamudPlugin
         ImGui.SameLine();
         ImGui.SetNextItemWidth(240);
         if (ImGui.SliderInt("##稳定时间", ref stable, 300, 5000)) { _config.StableMilliseconds = stable; dirty = true; }
-        ImGui.TextWrapped("提示：切换请求不会反复发送；手动改动 HUD 后使用 /autohud recheck。请先备份游戏 HUD 设置。");
+        ImGui.TextWrapped("提示：切换未生效时会自动重试；手动改动 HUD 后使用 /autohud recheck。请先备份游戏 HUD 设置。");
         if (dirty) { Reset(); Save(); }
         ImGui.End();
     }
